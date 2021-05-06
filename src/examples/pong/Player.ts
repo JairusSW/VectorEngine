@@ -25,8 +25,8 @@ export class Player extends Collider {
       this.x, this.y, this.color, 0.0, this.scale);
   }
 
-  @inline move(): void {
-    this.x = Input.MouseX;
+  @inline move(x: f32): void {
+    this.x = x
 
     if (this.x < -1.0) {
       this.x = -1.0;

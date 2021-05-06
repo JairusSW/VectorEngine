@@ -47,6 +47,17 @@ const F_SHADER = /*glsl*/ `#version 300 es
   }
 `;
 
+// Networking client 
+var client;
+var mouseX;
+var mouseY;
+var opponentMouseX = 0.0
+var opponentMouseY = 0.0
+var ballX = 0.0
+var ballY = 0.0
+var clientID = 0
+
+var mousePtr;
 var memory;
 var game_loop;
 //var pre_update;
@@ -82,6 +93,7 @@ var lastTime = 0;
 
 
 function render() {
+	
 	if (game_loop != null) {
 		let delta = 0;
 		if (lastTime !== 0) {
@@ -104,6 +116,7 @@ function render() {
 		//post_update();
 	}
 	requestAnimationFrame(render);
+	
 }
 
 function clear() {
@@ -131,6 +144,8 @@ function renderLine(line_data_pointer, len, x, y, rot, scale, color, type) {
 var keyDownPos;
 
 function keyDown(event) {
+	event.preventDefault();
+
 	if (keyPtr == null) {
 		return;
 	}
@@ -138,37 +153,23 @@ function keyDown(event) {
 		keyDownPos = new Uint8Array(memory.buffer, keyPtr, 100)
 	}
 	keyDownPos[event.keyCode] = true;
-	console.log(`
-	keyPtr: ${keyPtr}
-	code: ${event.keyCode}
-	keyDownPos[event.code]: ${keyDownPos[event.keyCode]}
-	`);
 }
 
 function keyUp(event) {
+	event.preventDefault();
+
 	if (keyDownPos == null) {
 		return;
 	}
 	keyDownPos[event.keyCode] = false;
 }
 
-let mousePtr;
-
 function mouseMove(event) {
 	if (mousePtr == null) {
-		console.log(
-			`
-			mouseXPtr: ${mouseXPtr}
-			`
-		);
 		mousePtr = new Int32Array(memory.buffer, mouseXPtr, 8);
 	}
 	mousePtr[0] = event.offsetX;
 	mousePtr[1] = event.offsetY;
-	console.log(`
-	event.offsetX: ${event.offsetX}
-	event.offsetY: ${event.offsetY}
-	`);
 }
 
 function onContext(event) {
@@ -487,7 +488,99 @@ function playSFX(wave_type, freq, freq_slide,
 
 }
 
+export function runNetwork(options = {
+	room: '',
+	limit: 0,
+	url: '',
+	actions: []
+}) {
+
+	// Import networking client (browserify)
+	const NetworkClient = require('/client.js')
+
+	let room = prompt('Enter Room Name')
+
+	const limit = 2
+
+	client = new NetworkClient({
+        room: room,
+        limit: limit,
+        url: 'wss://ping-pong-vectorengine.herokuapp.com/',
+        actions: []
+    })
+
+	client.on('start', () => {
+
+		runVectorGame(client.canvas_id, client.wasm_file, client.game_loop_name, client.memory_pages)
+
+	})
+
+	client.on('join', (data) => {
+
+		console.log('Join!', data, data['data'] === limit)
+
+		if (data['data'] === limit) {
+
+			console.log('Starting!')
+
+			client.send({
+				event: 'start',
+				data: '',
+				actions: []
+			})
+
+			runVectorGame(client.canvas_id, client.wasm_file, client.game_loop_name, client.memory_pages)
+
+		}
+
+	})
+
+	client.on('ready', () => {
+
+		console.log('ready!')
+		// Notify other clients that you joined.
+		client.send({
+			event: 'join',
+			data: client.id,
+			actions: []
+		})
+
+		console.log(`Connected to room with id ${client.id}`)
+
+		clientID = client.id
+
+	})
+
+	client.on('position', (data) => {
+
+		opponentMouseX = data['data'].playerX * 1.0
+
+		opponentMouseY = data['data'].playerY * 1.0
+
+		if (data['data'].ballX && data['data'].ballY) {
+
+			// If we get ball positions, set it! If not, were the server.
+			ballX = data['data'].ballX
+
+			ballY = data['data'].ballY
+
+		}
+
+	})
+
+}
+
 export function runVectorGame(canvas_id, wasm_file, game_loop_name, memory_pages = 100) {
+
+	if (client && !client.canvas_id) {
+		// If networking is enabled, pause it until game starts.
+		client.canvas_id = canvas_id
+		client.wasm_file = wasm_file
+		client.game_loop_name = game_loop_name
+		client.memory_pages = memory_pages
+		return
+	}
+
 	const canvas = document.getElementById(canvas_id);
 
 	var w = window.innerWidth * 0.99;
@@ -513,8 +606,7 @@ export function runVectorGame(canvas_id, wasm_file, game_loop_name, memory_pages
 			},
 			memory: memory,
 			seed: Date.now,
-		},
-		VectorEngine: {
+
 			renderLineData: renderLine,
 			canvasWidth: canvas.width,
 			canvasHeight: canvas.height,
@@ -538,6 +630,34 @@ export function runVectorGame(canvas_id, wasm_file, game_loop_name, memory_pages
 			},
 			logf32: (f) => console.log(`f32: ${f}`),
 			logi32: (i) => console.log(`i32: ${i}`),
+
+		},
+		pong: {
+			_networkGetX: () => {
+
+				return opponentMouseX
+
+			},
+			_networkGetY: () => {
+
+				return opponentMouseY
+
+			},
+			_networkBallX: () => {
+
+				return ballX
+
+			},
+			_networkBallY: () => {
+
+				return ballY
+
+			},
+			_networkID: () => {
+
+				return clientID || 0
+
+			}
 		}
 	};
 
@@ -552,12 +672,62 @@ export function runVectorGame(canvas_id, wasm_file, game_loop_name, memory_pages
 		canvas.addEventListener('mousemove', mouseMove);
 		canvas.addEventListener('mousedown', mouseDown);
 		canvas.addEventListener('mouseup', mouseUp);
+		canvas.addEventListener('mousemove', (event) => {
+			
+			mouseX = 2.0 * ((event.offsetX/cnvs.width) - 0.5)
+			mouseY = 2.0 * ((event.offsetY/cnvs.width) - 0.5)
+
+			// Finally got it calculated!
+			// Sets the graph cordinates
+		})
+
 		canvas.oncontextmenu = onContext;
 
 		document.addEventListener('keyup', keyUp);
 		document.addEventListener('keydown', keyDown);
 
 	})();
+
+	// Send @60fps, lets say.
+
+	setInterval(() => {
+
+		if (client.id === 1) {
+			
+			// If client is the host, they will send out the ball stuff.
+
+			// We set ballX/Y
+			ballX = wasm_obj.instance.exports.getBallX()
+			
+			ballY = wasm_obj.instance.exports.getBallY()
+
+			// Finally, send the data!
+			client.send({
+				event: 'position',
+				data: {
+					playerX: mouseX,
+					playerY: mouseY,
+					ballX: ballX,
+					ballY: ballY
+				},
+				actions: []
+			})
+		
+			return
+
+		}
+
+		// If we arn't the host, just send our position
+		client.send({
+			event: 'position',
+			data: {
+				playerX: mouseX,
+				playerY: mouseY
+			},
+			actions: []
+		})
+
+	}, 1000 / 60);
 
 	gl = canvas.getContext('webgl2');
 

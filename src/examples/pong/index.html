@@ -20,12 +20,19 @@
 <body>
   <div id="begin">Click to Begin</div>
   <canvas width="640" height="640" id="cnvs"></canvas>
+  <script src="../../../Networking/WebSocket/client.browser.js"></script>
   <script type="module">
-    import { runVectorGame } from "../../engine/VectorEngine.js";
+    import { runVectorGame, runNetwork } from "../../engine/VectorEngine.js";
 
     //const canvas = document.getElementById("cnvs");
     function playGame() {
       document.getElementById("begin").style.display = "none";
+      runNetwork({
+        room: '1234567',
+        limit: 2,
+        url: 'ws://ping-pong-vectorengine.herokuapp.com',
+        actions: []
+      })
       runVectorGame("cnvs", "pong.wasm", "gameLoop", 10);
     }
     document.onclick = playGame;

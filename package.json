@@ -1,12 +1,15 @@
 {
   "name": "vectorengine",
-  "version": "1.0.23",
+  "version": "1.0.33",
   "description": "This is a minimal WebGL vector rendering engine written for AssemblyScript.  ",
   "main": "index.ts",
   "ascMain": "index.ts",
   "scripts": {
     "test": "dev",
-    "build": "rollup -c"
+    "build": "rollup -c",
+    "asbuild:untouched": "asc assembly/index.ts --target debug",
+    "asbuild:optimized": "asc assembly/index.ts --target release",
+    "asbuild": "npm run asbuild:untouched && npm run asbuild:optimized"
   },
   "repository": {
     "type": "git",
@@ -26,7 +29,7 @@
   "bugs": {
     "url": "https://github.com/battlelinegames/VectorEngine/issues"
   },
-  "homepage": "https://github.com/battlelinegames/VectorEngine#readme",
+  "homepage": "https://wasmbook.com",
   "devDependencies": {
     "assemblyscript": "^0.18.28",
     "connect": "^3.7.0",
@@ -36,6 +39,11 @@
     "serve-static": "^1.14.1"
   },
   "dependencies": {
+    "@assemblyscript/loader": "^0.18.30",
+    "avro-js": "^1.10.2",
+    "bufferutil": "^4.0.3",
+    "localtunnel": "^2.0.1",
+    "utf-8-validate": "^5.0.4",
     "ws": "^7.4.5"
   }
 }
